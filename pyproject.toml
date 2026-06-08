@@ -1,0 +1,21 @@
+[project]
+name = "flkl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "utex",
+]
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+utex = { git = "https://github.com/SomeKindOfDuck/utex.git" }
+
+[project.scripts]
+train = "flkl.train:main"
+test = "flkl.test:main"
+calibrate = "flkl.calibrate:main"
