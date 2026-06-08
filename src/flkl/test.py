@@ -18,7 +18,7 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
     from utex.scheduler import (SessionMarker, TrialIterator,
                                 blockwise_shuffle2, mix, mixn, repeat)
 
-    from flkl.share import as_millis, count_lick, flush_message_for
+    from flkl.share import as_millis, flush_message_for
 
     reward_pin = expvars.get("reward-pin", 4)
     audio_pin = expvars.get("speaker-pin", 2)
@@ -114,7 +114,7 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
         pass
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     from datetime import datetime
     from os import mkdir
@@ -133,7 +133,6 @@ if __name__ == "__main__":
     from utex.fs import get_current_file_abspath, namefile
     from utex.scheduler import SessionMarker
 
-    from flkl.share import read
 
     parser = argparse.ArgumentParser(description="Run the flickr discrimination task.")
     parser.add_argument("--subject", "-s", required=True, help="Subject ID")
@@ -200,3 +199,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.send_all(SessionMarker.ABEND)
         observer.finish()
+
+
+if __name__ == "__main__":
+    main()

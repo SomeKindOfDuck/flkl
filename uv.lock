@@ -94,11 +94,15 @@ name = "flkl"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pyyaml" },
     { name = "utex" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "utex", git = "https://github.com/SomeKindOfDuck/utex.git" }]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "utex", git = "https://github.com/SomeKindOfDuck/utex.git" },
+]
 
 [[package]]
 name = "numpy"
