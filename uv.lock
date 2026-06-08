@@ -148,7 +148,7 @@ wheels = [
 [[package]]
 name = "pyno"
 version = "0.1.0"
-source = { git = "https://github.com/7cm-diameter/pyno.git#5c1faabba134c4f25f3772d7183ca7c0b73b7d80" }
+source = { git = "https://github.com/7cm-diameter/pyno.git#1735c1048124300829f131a42689150b6e79cff5" }
 dependencies = [
     { name = "pyserial" },
     { name = "pyyaml" },
