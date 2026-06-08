@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+log/
+!*sample.yaml
+data/

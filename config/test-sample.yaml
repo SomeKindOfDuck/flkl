@@ -1,0 +1,31 @@
+Comport:
+  output:
+    baudrate: 115200
+    sketch: "./ino"
+
+Experimental:
+  speaker-pin: 2
+  led-pin: 3
+  reward-pin: 4
+  ir-pin: 2
+
+  reward-duration: 0.01
+  flickr-duration: 2.
+
+  rewarded-frequency: [12, 14]
+  extinction-frequency: [4, 6, 9]
+  audio-frequency: [4, 9, 14]
+  async-flickrs: [[9, 1], [9, 4], [9, 14], [9, 17]]
+
+  reward-ratio: 3
+  extinction-ratio: 2
+  sync-ratio: 1
+  async-ratio: 2
+  visual-ratio: 1
+  audio-ratio: 2
+
+  trials-per-stimulus: 10
+  ITI: 7.
+  ITI-range: 2.
+
+  finished: false
