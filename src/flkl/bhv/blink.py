@@ -50,32 +50,22 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--pin",
-        "-p",
-        default=4,
+        "pin",
         type=int,
         help="Output pin to blink",
     )
     parser.add_argument(
-        "--duration",
-        "-d",
-        required=True,
+        "duration",
         type=float,
         help="Duration of each blink in seconds",
     )
     parser.add_argument(
-        "--interval",
-        "-i",
-        required=True,
+        "interval",
         type=float,
         help="Interval before each blink in seconds",
     )
     parser.add_argument(
-        "--number-of-blinks",
-        "--number-of-blink",
-        "-n",
-        dest="number_of_blinks",
-        required=True,
+        "number_of_blinks",
         type=int,
         help="Number of pin blinks",
     )

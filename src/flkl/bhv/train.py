@@ -128,8 +128,8 @@ def main():
 
 
     parser = argparse.ArgumentParser(description="Run the flickr discrimination task.")
-    parser.add_argument("--subject", "-s", required=True, help="Subject ID")
-    parser.add_argument("--yaml", "-y", required=True, help="Path to YAML config file")
+    parser.add_argument("subject", help="Subject ID")
+    parser.add_argument("yaml", help="Path to YAML config file")
     args = parser.parse_args()
 
     subject = args.subject
