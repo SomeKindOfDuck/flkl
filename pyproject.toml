@@ -17,6 +17,6 @@ build-backend = "uv_build"
 utex = { git = "https://github.com/SomeKindOfDuck/utex.git" }
 
 [project.scripts]
-train = "flkl.train:main"
-test = "flkl.test:main"
-blink = "flkl.blink:main"
+train = "flkl.bhv.train:main"
+test = "flkl.bhv.test:main"
+blink = "flkl.bhv.blink:main"

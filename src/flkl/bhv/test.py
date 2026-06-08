@@ -1,6 +1,6 @@
 from amas.agent import Agent
 
-from flkl.share import Flkl
+from flkl.bhv.share import Flkl
 
 
 def show_progress(trial: int, iti: float, modality: int, vhz: float, ahz: float):
@@ -18,7 +18,7 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
     from utex.scheduler import (SessionMarker, TrialIterator,
                                 blockwise_shuffle2, mix, mixn, repeat)
 
-    from flkl.share import as_millis, flush_message_for
+    from flkl.bhv.share import as_millis, flush_message_for
 
     reward_pin = expvars.get("reward-pin", 4)
     audio_pin = expvars.get("speaker-pin", 2)
