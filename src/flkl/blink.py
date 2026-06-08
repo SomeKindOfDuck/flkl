@@ -3,7 +3,7 @@ from amas.agent import Agent
 from flkl.share import Flkl
 
 
-async def reward_calibration(agent: Agent, ino: Flkl, n: int, interval: float, duration: float, pin: int):
+async def blink(agent: Agent, ino: Flkl, n: int, interval: float, duration: float, pin: int):
     from amas.agent import NotWorkingError
     from numpy import arange
     from utex.agent import AgentAddress
@@ -24,7 +24,8 @@ async def reward_calibration(agent: Agent, ino: Flkl, n: int, interval: float, d
     except NotWorkingError:
         pass
 
-if __name__ == "__main__":
+
+def main():
     import argparse
 
     from amas.connection import Register
@@ -59,7 +60,7 @@ if __name__ == "__main__":
 
     controller = (
         Agent("CONTROLLER")
-        .assign_task(reward_calibration, ino=flkl, n=args.number_of_reward, interval=args.interval, duration=args.duration, pin=args.pin)
+        .assign_task(blink, ino=flkl, n=args.number_of_reward, interval=args.interval, duration=args.duration, pin=args.pin)
         .assign_task(self_terminate)
     )
 
@@ -74,3 +75,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.send_all(SessionMarker.ABEND)
         observer.finish()
+
+
+if __name__ == "__main__":
+    main()

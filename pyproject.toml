@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "pyyaml>=6.0.3",
     "utex",
 ]
 
@@ -18,4 +19,4 @@ utex = { git = "https://github.com/SomeKindOfDuck/utex.git" }
 [project.scripts]
 train = "flkl.train:main"
 test = "flkl.test:main"
-calibrate = "flkl.calibrate:main"
+blink = "flkl.blink:main"
