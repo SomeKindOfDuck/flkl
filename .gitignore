@@ -10,6 +10,8 @@ wheels/
 .venv
 
 log/
+fig/
 !*sample.yaml
+group.toml
 *.yaml
 data/
