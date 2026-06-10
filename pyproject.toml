@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "pandas>=2.3.3",
     "pyyaml>=6.0.3",
+    "toml>=0.10.2",
     "utex",
 ]
 
@@ -16,7 +18,15 @@ build-backend = "uv_build"
 [tool.uv.sources]
 utex = { git = "https://github.com/SomeKindOfDuck/utex.git" }
 
+[dependency-groups]
+dev = [
+    "isort>=8.0.1",
+    "python-language-server[all]>=0.36.2",
+    "yapf>=0.43.0",
+]
+
 [project.scripts]
 train = "flkl.bhv.train:main"
 test = "flkl.bhv.test:main"
 blink = "flkl.bhv.blink:main"
+merge = "flkl.analysis.merge_behavior_data:main"
