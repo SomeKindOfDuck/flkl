@@ -50,200 +50,240 @@ draw_lick_raster <- function(data, only_newest = TRUE) {
       subject <- .BY$subject
       experiment_date <- .BY$date
 
-      raster_data <- copy(.SD %>% filter(event == "Lick-on"))
-
-      raster_data[
-        ,
-        serial := data.table::frank(serial, ties.method = "dense"),
-        by = .(visual_freq, audio_freq)
-      ]
-
-      raster_plot <- ggplot(raster_data) +
-        geom_point(
-          aes(x = time, y = serial),
-          size = 0.25
-        ) +
-        geom_vline(xintercept = 0, linetype = "dashed") +
-        geom_vline(xintercept = -2, linetype = "dashed") +
-        facet_wrap(~ visual_freq + audio_freq, scales = "free_y") +
-        labs(
-          x = "Time from reward onset",
-          y = "Trial"
-        ) +
-        theme_classic() +
-        theme(
-          aspect.ratio = 0.5,
-          strip.text = element_text(size = 6, margin=margin(t=1, r=1, b=1, l=1)),
-          strip.background = element_rect(linewidth = 0.2),
-          panel.spacing = unit(0.4, "lines"),
-          axis.text = element_text(size = 6),
-          axis.title = element_text(size = 8)
-        )
-
-      ggsave(
-        filename = file.path(
-          FIGURE_PATH,
-          paste0("raster", "-", subject, "-", experiment_date, ".jpg")
-        ),
-        plot = raster_plot,
-        dpi = 300,
-        width = 8,
-        height = 4
+      output_path <- file.path(
+        FIGURE_PATH,
+        paste0("raster", "-", subject, "-", experiment_date, ".jpg")
       )
 
-      invisible(NULL)
+      if (file.exists(output_path)) {
+        message("Skip existing figure: ", output_path)
+        NULL
+      } else {
+        raster_data <- copy(.SD %>% filter(event == "Lick-on"))
+
+        raster_data[
+          ,
+          serial := data.table::frank(serial, ties.method = "dense"),
+          by = .(visual_freq, audio_freq)
+        ]
+
+        raster_plot <- ggplot(raster_data) +
+          geom_point(
+            aes(x = time, y = serial),
+            size = 0.25
+          ) +
+          geom_vline(xintercept = 0, linetype = "dashed") +
+          geom_vline(xintercept = -2, linetype = "dashed") +
+          facet_wrap(~ visual_freq + audio_freq, scales = "free_y") +
+          labs(
+            x = "Time from reward onset",
+            y = "Trial"
+          ) +
+          theme_classic() +
+          theme(
+            aspect.ratio = 0.5,
+            strip.text = element_text(size = 6, margin = margin(t = 1, r = 1, b = 1, l = 1)),
+            strip.background = element_rect(linewidth = 0.2),
+            panel.spacing = unit(0.4, "lines"),
+            axis.text = element_text(size = 6),
+            axis.title = element_text(size = 8)
+          )
+
+        ggsave(
+          filename = output_path,
+          plot = raster_plot,
+          dpi = 300,
+          width = 8,
+          height = 4
+        )
+
+        NULL
+      }
     },
     by = .(subject, date)
   ]
 }
 
 draw_progress <- function(data) {
-  data[ ,
+  data[
+    ,
     {
-      subject <- unique(.BY$subject)
+      subject <- .BY$subject
       session <- max(.SD$session)
       experiment_date <- max(.SD$date)
 
-      progress_plot <- ggplot() +
-        stat_summary(
-          data = .SD %>% filter(stimulus_type != "Asynchronous"),
-          fun = "mean", geom = "point",
-          aes(
-            x = session,
-            y = lick,
-            color = freqcat,
-            group = interaction(freqcat, major_freq)
-          ),
-          size = 0.5, alpha = 0.25
-        ) +
-        stat_summary(
-          data = .SD %>% filter(freqcat == "Low", stimulus_type %in% c("Visual-only", "Synchronous")),
-          fun = "mean", geom = "line",
-          aes(
-            x = session,
-            y = lick * 1.5,
-          ),
-          size = 0.5, alpha = 0.25
-        ) +
-        stat_summary(
-          data = .SD %>%
-            filter(freqcat == "Low", stimulus_type == "Audio-only"),
-          fun.data = function(y) {
-            m <- mean(y, na.rm = TRUE)
-            data.frame(
-              y = m,
-              ymin = m - 0.5,
-              ymax = m + 0.5
-            )
-          },
-          geom = "ribbon",
-          aes(
-            x = session,
-            y = lick,
-            group = 1
-          ),
-          alpha = 0.15
-        ) +
-        stat_summary(
-          data = .SD %>% filter(stimulus_type != "Asynchronous"),
-          fun = "mean", geom = "point",
-          aes(x = session, y = lick, color = freqcat)
-        ) +
-        facet_wrap(~stimulus_type) +
-        coord_cartesian(ylim = c(0, NA)) +
-        scale_x_continuous(
-          limits = c(session - 9, session),
-          breaks = seq(session - 9, session, by = 1)
-        ) +
-        theme_classic() +
-        theme(
-          aspect.ratio = 0.5,
-          strip.text = element_text(size = 6, margin=margin(t=1, r=1, b=1, l=1)),
-          strip.background = element_rect(linewidth = 0.2),
-          panel.spacing = unit(0.4, "lines"),
-          axis.text = element_text(size = 6),
-          axis.title = element_text(size = 8)
-        )
+      output_path <- file.path(
+        FIGURE_PATH,
+        paste0("progress", "-", subject, "-", experiment_date, ".jpg")
+      )
+
+      if (file.exists(output_path)) {
+        message("Skip existing figure: ", output_path)
+        NULL
+      } else {
+        progress_plot <- ggplot() +
+          stat_summary(
+            data = .SD %>% filter(time_window == "Pre-CS"),
+            fun = "mean", geom = "point",
+            aes(
+              x = session,
+              y = lick,
+            ),
+            size = 0.5
+          ) +
+          stat_summary(
+            data = .SD %>% filter(time_window == "Pre-CS"),
+            fun.data = "mean_se", geom = "errorbar",
+            aes(
+              x = session,
+              y = lick,
+            ),
+            linewidth = 0.2, width = 0.5
+          ) +
+          stat_summary(
+            data = .SD %>% filter(stimulus_type != "Asynchronous", time_window == "CS"),
+            fun = "mean", geom = "point",
+            aes(
+              x = session,
+              y = lick,
+              color = freqcat,
+              group = interaction(freqcat, major_freq)
+            ),
+            size = 0.5, alpha = 0.25
+          ) +
+          stat_summary(
+            data = .SD %>% filter(freqcat == "Low", stimulus_type %in% c("Visual-only", "Synchronous"), time_window == "CS"),
+            fun = "mean", geom = "line",
+            aes(
+              x = session,
+              y = lick * 1.5,
+            ),
+            size = 0.5, alpha = 0.25
+          ) +
+          stat_summary(
+            data = .SD %>%
+              filter(freqcat == "Low", stimulus_type == "Audio-only", time_window == "CS"),
+            fun.data = function(y) {
+              m <- mean(y, na.rm = TRUE)
+              data.frame(
+                y = m,
+                ymin = m - 0.5,
+                ymax = m + 0.5
+              )
+            },
+            geom = "ribbon",
+            aes(
+              x = session,
+              y = lick,
+              group = 1
+            ),
+            alpha = 0.15
+          ) +
+          stat_summary(
+            data = .SD %>% filter(stimulus_type != "Asynchronous", time_window == "CS"),
+            fun = "mean", geom = "point",
+            aes(x = session, y = lick, color = freqcat)
+          ) +
+          facet_wrap(~stimulus_type) +
+          coord_cartesian(ylim = c(0, NA)) +
+          scale_x_continuous(
+            limits = c(session - 9, session),
+            breaks = seq(session - 9, session, by = 1)
+          ) +
+          theme_classic() +
+          theme(
+            aspect.ratio = 0.5,
+            strip.text = element_text(size = 6, margin = margin(t = 1, r = 1, b = 1, l = 1)),
+            strip.background = element_rect(linewidth = 0.2),
+            panel.spacing = unit(0.4, "lines"),
+            axis.text = element_text(size = 6),
+            axis.title = element_text(size = 8)
+          )
 
         ggsave(
-          filename = file.path(
-            FIGURE_PATH,
-            paste0("progress", "-", subject, "-", experiment_date, ".jpg")
-          ),
+          filename = output_path,
           plot = progress_plot,
           dpi = 300,
           width = 9,
           height = 3
         )
 
-        invisible()
+        NULL
+      }
     },
-    by = subject]
+    by = subject
+  ]
 }
-
 draw_psychometric_function <- function(data) {
-  data[ ,
+  data[
+    ,
     {
-      subject <- unique(.BY$subject)
+      subject <- .BY$subject
       session <- max(.SD$session)
       experiment_date <- max(.SD$date)
 
-      last_date <- .SD[.SD$date == experiment_date]
-      nstim <- unique(last_date$major_freq)
+      output_path <- file.path(
+        FIGURE_PATH,
+        paste0("psychometric", "-", subject, "-", experiment_date, ".jpg")
+      )
 
-      if (length(nstim) <= 1) {
-        return()
+      if (file.exists(output_path)) {
+        message("Skip existing figure: ", output_path)
+        NULL
+      } else {
+        last_date <- .SD[.SD$date == experiment_date]
+        nstim <- unique(last_date$major_freq)
+
+        if (length(nstim) > 1) {
+          psychometric_function <- ggplot(last_date) +
+            geom_point(
+              aes(
+                x = major_freq, y = lick,
+                color = stimulus_type, group = stimulus_type
+              ),
+              size = 0.5, alpha = 0.25
+            ) +
+            stat_summary(
+              fun.data = "mean_se", geom = "errorbar",
+              aes(
+                x = major_freq, y = lick,
+                color = stimulus_type, group = stimulus_type
+              ),
+              linewidth = 0.5, width = 0.5
+            ) +
+            stat_summary(
+              fun = "mean", geom = "point",
+              aes(
+                x = major_freq, y = lick,
+                color = stimulus_type, group = stimulus_type
+              ),
+              size = 2
+            ) +
+            coord_cartesian(ylim = c(0, NA)) +
+            theme_classic() +
+            theme(
+              aspect.ratio = 0.5,
+              strip.text = element_text(size = 6, margin = margin(t = 1, r = 1, b = 1, l = 1)),
+              strip.background = element_rect(linewidth = 0.2),
+              panel.spacing = unit(0.4, "lines"),
+              axis.text = element_text(size = 6),
+              axis.title = element_text(size = 8)
+            )
+
+          ggsave(
+            filename = output_path,
+            plot = psychometric_function,
+            dpi = 300,
+            width = 8,
+            height = 4
+          )
+        }
+
+        NULL
       }
-
-      psychometric_function <- ggplot(last_date) +
-        geom_point(
-          aes(
-            x = major_freq, y = lick,
-            color = stimulus_type, group = stimulus_type
-          ),
-          size = 0.5, alpha = 0.25
-        ) +
-        stat_summary(
-          fun.data = "mean_se", geom = "errorbar",
-          aes(
-            x = major_freq, y = lick,
-            color = stimulus_type, group = stimulus_type
-          ),
-          linewidth = 0.5, width = 0.5
-        ) +
-        stat_summary(
-          fun = "mean", geom = "point",
-          aes(
-            x = major_freq, y = lick,
-            color = stimulus_type, group = stimulus_type
-          ),
-          size = 2
-        ) +
-        coord_cartesian(ylim = c(0, NA)) +
-        theme_classic() +
-        theme(
-          aspect.ratio = 0.5,
-          strip.text = element_text(size = 6, margin=margin(t=1, r=1, b=1, l=1)),
-          strip.background = element_rect(linewidth = 0.2),
-          panel.spacing = unit(0.4, "lines"),
-          axis.text = element_text(size = 6),
-          axis.title = element_text(size = 8)
-        )
-
-        ggsave(
-          filename = file.path(
-            FIGURE_PATH,
-            paste0("psychometric", "-", subject, "-", experiment_date, ".jpg")
-          ),
-          plot = psychometric_function,
-          dpi = 300,
-          width = 8,
-          height = 4
-        )
-
-        invisible()
     },
-    by = subject]
+    by = subject
+  ]
 }
 
 #############################
@@ -333,6 +373,7 @@ lick_data <- aligned_data %>%
   ) %>%
   data.table()
 
+
 draw_lick_raster(aligned_data, TRUE)
 draw_progress(lick_data)
-draw_psychometric_function(lick_data)
+draw_psychometric_function(lick_data %>% filter(time_window == "CS"))
