@@ -6,7 +6,6 @@ library(viridis)
 library(utexr)
 library(data.table)
 
-
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
 
@@ -15,29 +14,46 @@ parse_args <- function() {
     iter = 100
   )
 
+  usage <- paste0(
+    "Usage: Rscript decode_neuro.R ",
+    "--data-dir <path> [--iter <integer>]\n",
+    "Example: Rscript decode_neuro.R ",
+    "--data-dir data/2p/G13M3-20260604"
+  )
+
   if (length(args) == 0) {
-    stop("--data_dir is required. Example: Rscript decode_neuro.R --data_dir data/2p/G13M3-20260604")
+    stop("--data-dir is required.\n", usage, call. = FALSE)
   }
 
   i <- 1
   while (i <= length(args)) {
     arg <- args[i]
 
-    if (arg == "--data_dir") {
+    if (arg == "--data-dir") {
       if (i + 1 > length(args)) {
-        stop("--data_dir requires a value.")
+        stop("--data-dir requires a value.", call. = FALSE)
       }
+
+      if (startsWith(args[i + 1], "--")) {
+        stop("--data-dir requires a value.", call. = FALSE)
+      }
+
       parsed$data_dir <- args[i + 1]
       i <- i + 2
 
-    } else if (startsWith(arg, "--data_dir=")) {
-      parsed$data_dir <- sub("^--data_dir=", "", arg)
+    } else if (startsWith(arg, "--data-dir=")) {
+      parsed$data_dir <- sub("^--data-dir=", "", arg)
       i <- i + 1
 
     } else if (arg == "--iter") {
       if (i + 1 > length(args)) {
-        stop("--iter requires a value.")
+        stop("--iter requires a value.", call. = FALSE)
       }
+
+      if (startsWith(args[i + 1], "--")) {
+        stop("--iter requires a value.", call. = FALSE)
+      }
+
       parsed$iter <- as.integer(args[i + 1])
       i <- i + 2
 
@@ -46,16 +62,20 @@ parse_args <- function() {
       i <- i + 1
 
     } else {
-      stop("Unknown argument: ", arg)
+      stop("Unknown argument: ", arg, "\n", usage, call. = FALSE)
     }
   }
 
   if (is.null(parsed$data_dir) || parsed$data_dir == "") {
-    stop("--data_dir is required. Example: Rscript decode_neuro.R --data_dir data/2p/G13M3-20260604")
+    stop("--data-dir is required.\n", usage, call. = FALSE)
+  }
+
+  if (!dir.exists(parsed$data_dir)) {
+    stop("data-dir does not exist: ", parsed$data_dir, call. = FALSE)
   }
 
   if (is.na(parsed$iter) || parsed$iter < 1) {
-    stop("--iter must be a positive integer.")
+    stop("--iter must be a positive integer.", call. = FALSE)
   }
 
   parsed
@@ -154,7 +174,7 @@ TIME_BIN <- 0.5
 
 dff_path <- list.files(data_dir, pattern = "dff", full.names = T)
 behavior_path <- file.path("data/behavior/merged.csv")
-FIGURE_PATH <- file.path("fig/neuro/decode")
+FIGURE_PATH <- file.path("fig/neuro/decode_stimulus_from_dff")
 
 
 decodable_data <- (function() {
