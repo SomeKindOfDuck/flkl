@@ -5,6 +5,7 @@ library(tools)
 library(viridis)
 library(utexr)
 library(data.table)
+source("src/flkl/analysis/behavior_io.R")
 
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
@@ -173,13 +174,11 @@ TIME_BIN <- 0.5
 })()
 
 dff_path <- list.files(data_dir, pattern = "dff", full.names = T)
-behavior_path <- file.path("data/behavior/merged.csv")
 FIGURE_PATH <- file.path("fig/neuro/decode_stimulus_from_dff")
 
 
 decodable_data <- (function() {
-  merged_data <- fread(behavior_path)
-  target_data <- merged_data[merged_data$date == as.integer(target_date) & merged_data$subject == target_subject, ]
+  target_data <- read_behavior_data(target_subject, target_date)
   target_data[, frame := cumsum(event == "FrameSignal-on")]
 
   aligned_data <- align_with_reward(target_data)
