@@ -1,3 +1,20 @@
+# dF/Fから刺激をデコードする
+#
+# Usage (プロジェクトのルートで実行する):
+#   Rscript src/flkl/analysis/decode_stimulus_from_dff.R --data-dir <path> [--iter <integer>]
+#
+#   --data-dir : 2pデータのディレクトリ(data/2p/{subject}-{date})。
+#                ディレクトリ名から個体名と日付を取得し、対応する行動データを
+#                data/behavior/から読み込む
+#   --iter     : デコーダーの反復回数 (default: 100)
+#
+# Example:
+#   Rscript src/flkl/analysis/decode_stimulus_from_dff.R --data-dir data/2p/G13M3-20260604
+#
+# Output:
+#   - {data-dir}/decode.csv
+#   - fig/neuro/decode_stimulus_from_dff/{subject}-{date}.jpg
+
 library(tidyverse)
 library(glmnet)
 library(arrow)
@@ -16,9 +33,9 @@ parse_args <- function() {
   )
 
   usage <- paste0(
-    "Usage: Rscript decode_neuro.R ",
+    "Usage: Rscript src/flkl/analysis/decode_stimulus_from_dff.R ",
     "--data-dir <path> [--iter <integer>]\n",
-    "Example: Rscript decode_neuro.R ",
+    "Example: Rscript src/flkl/analysis/decode_stimulus_from_dff.R ",
     "--data-dir data/2p/G13M3-20260604"
   )
 
