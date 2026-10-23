@@ -1,6 +1,6 @@
 """訓練経過の作図用データを作成する
 
-data/behavior/にあるbinary csv(tdmsから変換したもの)を読み、
+tdms から変換した binary parquet(または binary csv)を読み、
 まだ処理していないセッションを追加して以下の2つのファイルを更新する。
 
 - recent.csv  : 個体ごとに直近N(default: 10)セッションの生イベントデータ
@@ -105,7 +105,7 @@ def resolve_condition(
 
 
 def parse_identifier(path: Path) -> dict:
-    # {subject}_{phase}_{session}_{date}-{time}_binary.csv
+    # {subject}_{phase}_{session}_{date}-{time}_binary.{parquet,csv}
     identifier = path.stem.split("_")
 
     if len(identifier) < 4:
@@ -123,7 +123,8 @@ def parse_identifier(path: Path) -> dict:
 
 
 def load_binary_csv(path: Path, condition: str, metadata: dict) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    # *_binary.parquet(2026-10-23 以降の保存形式)と *_binary.csv のどちらも読む。列は event, time
+    df = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path)
 
     missing_cols = {"time", "event"} - set(df.columns)
     if missing_cols:
@@ -293,14 +294,14 @@ def parse_args() -> argparse.Namespace:
         "csv",
         type=Path,
         nargs="*",
-        help="Input binary CSV file(s). Default: all *_binary.csv in --input-dir",
+        help="Input binary parquet/CSV file(s). Default: all *_binary.parquet and *_binary.csv in --input-dir",
     )
     parser.add_argument(
         "--input-dir",
         "-i",
         type=Path,
         default=Path("data/behavior"),
-        help="Directory containing binary CSV files. Default: data/behavior",
+        help="Directory containing binary parquet/CSV files. Default: data/behavior",
     )
     parser.add_argument(
         "--output-dir",
@@ -334,7 +335,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    csv_paths = args.csv or sorted(args.input_dir.glob("*_binary.csv"))
+    csv_paths = args.csv or sorted([*args.input_dir.glob("*_binary.parquet"), *args.input_dir.glob("*_binary.csv")])
     input_paths = [path.resolve() for path in csv_paths]
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)

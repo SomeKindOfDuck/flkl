@@ -20,7 +20,7 @@ log/            # ログ(git管理外)
 ### Python
 
 - [uv](https://docs.astral.sh/uv/)。Pythonの依存パッケージは `uv sync` で入る(`pyproject.toml` 参照)
-- `detect` コマンド: tdms を binary csv に変換する。
+- `detect` コマンド: tdms を binary csv に変換する(`daily.sh` がそのあと parquet に変換する)。
   [TDMSViewer](https://github.com/7cm-diameter/TDMSViewer) を clone して `uv tool install <clone先>` でインストールする
   (`~/.local/bin` に入る)
 
@@ -59,7 +59,9 @@ Ubuntu(GNOME)を想定。
 | 変数 | 内容 |
 |---|---|
 | `NAS_URI` | tdms が保存されている SMB 共有(例: `smb://fnas.local/fnas_local/`) |
-| `NAS_DIR` | マウント後の tdms のあるディレクトリ(GVFS のマウント先) |
+| `NAS_DIR` | マウント後の行動データのディレクトリ(GVFS のマウント先。`Yamada_data/bhv`)。この下の `tdms/` と `parquet/` を使う |
+| `NAS_TDMS_DIR`, `NAS_PARQUET_DIR` | (省略可)tdms と binary parquet の置き場所。既定は `$NAS_DIR/tdms`、`$NAS_DIR/parquet` |
+| `SYNC_2P_BEHAVIOR` | (省略可)`1` にすると、2p のデータがある日の binary parquet を `data/behavior/` にコピーする。既定は `0`(コピーしない) |
 | `DETECT_CONFIG` | `detect` の設定ファイル。相対パスはプロジェクトのルートから |
 
 `group.toml` の形式:
@@ -71,13 +73,15 @@ multi = ["G12F1", "G12F2"]
 
 ## 訓練経過の処理(`monitor/`)
 
-tdms(NAS上)→ binary csv → 前処理 → 作図 の順に処理する。
+tdms(NAS上)→ binary parquet(NAS上)→ 前処理 → 作図 の順に処理する。
 
 ### データの置き場所
 
 | パス | 内容 |
 |---|---|
-| `data/behavior/*_binary.csv` | tdms から変換した binary csv(1セッション1ファイル) |
+| NAS `bhv/tdms/*.tdms` | 行動実験の tdms。`bhv/` 直下に置いたものは `daily.sh` がここに移す |
+| NAS `bhv/parquet/*_binary.parquet` | tdms から変換した binary parquet(1セッション1ファイル、列は `event`, `time`)。行動データの正本 |
+| `data/behavior/*_binary.parquet` | 本解析用のコピー。`SYNC_2P_BEHAVIOR=1` のとき、2p のデータがある日(`data/2p/{subject}-{date}/`)の分だけ `daily.sh` が NAS からコピーする |
 | `data/monitor/recent.csv` | 個体ごとに直近10セッションの生イベント(raster 用) |
 | `data/monitor/summary.csv` | 全セッションの、刺激×時間窓ごとの平均 lick rate |
 | `fig/monitor/{実験日}/` | raster / progress / psychometric の図と、その日の全個体の `progress-all.jpg` |
@@ -86,12 +90,12 @@ tdms(NAS上)→ binary csv → 前処理 → 作図 の順に処理する。
 ### 手動で実行する場合
 
 ```bash
-# 1. tdms を binary csv に変換し、data/behavior/ に移す(RotaryA/RotaryB は常に除外)
+# 1. tdms を binary csv に変換し(NAS の bhv/tdms/ で実行。RotaryA/RotaryB は常に除外)、parquet にして bhv/parquet/ に置く
 detect <tdmsファイル...> default.yaml --exclude-events RotaryA RotaryB
-mv <NAS上の>*_binary.csv data/behavior/
+uv run python -m flkl.monitor.to_parquet <*_binary.csv...> --outdir <NAS の bhv/parquet> --remove
 
 # 2. 前処理(未処理のセッションだけ追加する。再処理は --overwrite)
-uv run merge
+uv run merge --input-dir <NAS の bhv/parquet>
 
 # 3. 作図(既存の図はスキップする。描き直しは --force)
 Rscript src/flkl/monitor/draw_progress.R [subject ...] [--force]
@@ -99,8 +103,9 @@ Rscript src/flkl/monitor/draw_progress.R [subject ...] [--force]
 
 ### 日次自動化
 
-`src/flkl/monitor/daily.sh` が、NAS のマウント → 未処理 tdms の検出 → `detect` → `data/behavior/` への移動 →
-`merge` → 作図 を行う。新しいデータがなければ何もせず終了する。
+`src/flkl/monitor/daily.sh` が、NAS のマウント → `bhv/` 直下の tdms を `bhv/tdms/` へ移動 → 未処理 tdms の検出 → `detect` →
+parquet への変換(`bhv/parquet/` に置く)→ `merge`(出力はローカルの `data/monitor/`)→ 作図 を行う。
+新しいデータがなければ変換・merge・作図はしない。`SYNC_2P_BEHAVIOR=1` のときは、2p のデータがある日の binary parquet の `data/behavior/` へのコピーを毎回確かめる。
 完了・失敗時にはデスクトップ通知が出て、クリックすると図(失敗時はログ)のフォルダが開く。
 17時以降の実行で当日のデータが1つもなければ、NAS への移行忘れの可能性として通知する。
 
@@ -144,5 +149,6 @@ systemctl --user list-timers flkl-monitor.timer  # 次回の実行予定
 ## 本解析(`analysis/`)
 
 2pデータは `data/2p/{subject}-{date}/` に置く。各スクリプトはディレクトリ名から個体名と日付を取得し、
-対応する行動データを `data/behavior/` から読み込む(`src/flkl/analysis/behavior_io.R`)。
+対応する行動データを `data/behavior/` から読み込む(`src/flkl/analysis/behavior_io.R`。`*_binary.parquet` を優先し、なければ `*_binary.csv`)。
+`data/behavior/` のファイルは、`SYNC_2P_BEHAVIOR=1` なら、`data/2p/` にディレクトリを作った次の `daily.sh` の実行で NAS からコピーされる。
 実行方法は各スクリプトの先頭のコメントを参照。

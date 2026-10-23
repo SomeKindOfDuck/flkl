@@ -1,7 +1,9 @@
-# 行動データ(binary csv)の読み込み
+# 行動データ(binary parquet / binary csv)の読み込み
 library(data.table)
 
-# data/behavior/にある1セッション分のbinary csvを読み込む
+# data/behavior/にある1セッション分の行動データを読み込む
+# 2026-10-23 以降、正本は NAS(bhv/parquet/)にあり、2p のデータがある日の分だけ
+# daily.sh が data/behavior/ に *_binary.parquet としてコピーする。*_binary.csv(以前の形式)も読める
 # 旧merged.csvからsubject/dateで絞り込んだものと同じ形式
 # (subject, date, condition, phase, session, time, event)で返す
 read_behavior_data <- function(
@@ -13,9 +15,12 @@ read_behavior_data <- function(
   subject <- as.character(subject)
   date <- as.character(date)
 
-  # {subject}_{phase}_{session}_{date}-{time}_binary.csv
-  pattern <- paste0("^", subject, "_[^_]+_[0-9]+_", date, "-.*_binary\\.csv$")
+  # {subject}_{phase}_{session}_{date}-{time}_binary.{parquet,csv}。parquet があればそちらを使う
+  pattern <- paste0("^", subject, "_[^_]+_[0-9]+_", date, "-.*_binary\\.parquet$")
   paths <- list.files(behavior_dir, pattern = pattern, full.names = TRUE)
+  if (length(paths) == 0) {
+    paths <- list.files(behavior_dir, pattern = sub("parquet\\$$", "csv$", pattern), full.names = TRUE)
+  }
 
   if (length(paths) == 0) {
     stop("No behavior data found for subject=", subject, ", date=", date, " in ", behavior_dir)
@@ -30,7 +35,7 @@ read_behavior_data <- function(
 
   identifier <- strsplit(basename(paths), "_", fixed = TRUE)[[1]]
 
-  data <- fread(paths)
+  data <- if (grepl("\\.parquet$", paths)) as.data.table(arrow::read_parquet(paths)) else fread(paths)
   data[, time := time - min(time, na.rm = TRUE)]
 
   data[
