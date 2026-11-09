@@ -1,3 +1,5 @@
+#include "equal_on.h"
+
 struct StateSwitchPin {
   int pins[13];
   int currState[13];
@@ -143,6 +145,40 @@ double read_2bytes() {
 int flicker_states[14] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 double hz1;
 double hz2;
+
+
+uint32_t read_unsigned_bytes(uint8_t count) {
+  uint32_t value = 0;
+  for (uint8_t i = 0; i < count; ++i) {
+    int byte_value;
+    while ((byte_value = Serial.read()) == -1) {};
+    value |= uint32_t(byte_value) << (8 * i);
+  }
+  return value;
+}
+
+void run_equal_on(int pin1, int pin2, uint8_t frequency1, uint8_t frequency2,
+                  uint32_t duration_us, uint32_t total_on_us) {
+  EqualOnPulseTrain first(frequency1, duration_us, total_on_us);
+  EqualOnPulseTrain second(frequency2, duration_us, total_on_us);
+  uint32_t start = micros();
+  if (first.high) digiHIGH[pin1]();
+  if (pin2 >= 0 && second.high) digiHIGH[pin2]();
+  while (true) {
+    uint32_t elapsed = uint32_t(micros()) - start;
+    if (elapsed >= duration_us) break;
+    if (!first.finished && elapsed >= first.next_edge_us) {
+      first.advance();
+      if (first.high) digiHIGH[pin1](); else digiLOW[pin1]();
+    }
+    if (pin2 >= 0 && !second.finished && elapsed >= second.next_edge_us) {
+      second.advance();
+      if (second.high) digiHIGH[pin2](); else digiLOW[pin2]();
+    }
+  }
+  digiLOW[pin1]();
+  if (pin2 >= 0) digiLOW[pin2]();
+}
 
 
 void setup() {
@@ -551,6 +587,35 @@ void loop() {
         digiHIGH[pin1]();
         while(micros() - intervaltimer1 < duration_micros) {};
         digiLOW[pin1]();
+        break;
+      }
+
+      // Equal total ON time, independently for each output frequency.
+      // 0x18: pin, hz*10, duration_ms:u16, total_on_us:u32, rpin, reward_ms:u16
+      // 0x1a: pin1, pin2, hz1*10, hz2*10, duration_ms:u16,
+      //       total_on_us:u32, rpin, reward_ms:u16
+      case '\x18':
+      case '\x1a': {
+        pin2 = command == '\x1a' ? int(read_unsigned_bytes(1)) : -1;
+        uint8_t frequency1 = read_unsigned_bytes(1);
+        uint8_t frequency2 = pin2 >= 0 ? read_unsigned_bytes(1) : 0;
+        uint32_t duration_us = read_unsigned_bytes(2) * 1000UL;
+        uint32_t total_on_us = read_unsigned_bytes(4);
+        rpin = read_unsigned_bytes(1);
+        uint32_t reward_us = read_unsigned_bytes(2) * 1000UL;
+        if (pin1 < 0 || pin1 > 13 || pin2 > 13 || pin1 == pin2 ||
+            rpin < 0 || rpin > 13 || frequency1 == 0 ||
+            (pin2 >= 0 && frequency2 == 0) ||
+            total_on_us == 0 || total_on_us >= duration_us) {
+          break;
+        }
+        run_equal_on(pin1, pin2, frequency1, frequency2, duration_us, total_on_us);
+        if (rpin > 0) {
+          uint32_t reward_start = micros();
+          digiHIGH[rpin]();
+          while (uint32_t(micros()) - reward_start < reward_us) {};
+          digiLOW[rpin]();
+        }
         break;
       }
 

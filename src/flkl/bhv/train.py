@@ -1,6 +1,63 @@
 from amas.agent import Agent
 
-from flkl.bhv.share import Flkl
+from flkl.bhv.share import DEFAULT_FLICKR_ON_RATIO, Flkl, equal_on_parameters
+
+
+STIMULUS_KEYS = (
+    "visual-rewarded", "visual-non-rewarded", "audio-rewarded", "audio-non-rewarded",
+)
+LEGACY_STIMULUS_KEYS = (
+    "rewarded-frequency", "extinction-frequency", "audio-frequency", "audio-rewarded-frequency",
+)
+
+
+def normalize_stimuli(expvars: dict) -> dict:
+    """Return Experimental settings with separate rewarded/non-rewarded lists."""
+    from math import isfinite
+
+    def frequencies(key, default=()):
+        values = expvars.get(key, list(default))
+        if not isinstance(values, list) or any(
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not isfinite(value) for value in values
+        ):
+            raise ValueError(f"{key} must be a list of frequencies in Hz (use [] for none).")
+        return list(values)
+
+    has_new = any(key in expvars for key in STIMULUS_KEYS)
+    has_legacy = any(key in expvars for key in LEGACY_STIMULUS_KEYS)
+    if has_new and has_legacy:
+        raise ValueError(
+            "Do not mix visual-rewarded/visual-non-rewarded/audio-rewarded/audio-non-rewarded "
+            "with the old *-frequency stimulus settings."
+        )
+    if has_legacy:
+        visual_rewarded = frequencies("rewarded-frequency", [12, 14, 16])
+        visual_non_rewarded = frequencies("extinction-frequency", [6, 8, 10])
+        audio = frequencies("audio-frequency", [2, 9, 11, 13, 20])
+        audio_rewarded = frequencies("audio-rewarded-frequency")
+        if any(hz not in audio for hz in audio_rewarded):
+            raise ValueError("audio-rewarded-frequency must be included in audio-frequency.")
+        # Preserve the frequencies and their multiplicity within each class.
+        audio_rewarded = [hz for hz in audio if hz in audio_rewarded]
+        audio_non_rewarded = [hz for hz in audio if hz not in audio_rewarded]
+        lists = (visual_rewarded, visual_non_rewarded, audio_rewarded, audio_non_rewarded)
+    else:
+        lists = tuple(frequencies(key) for key in STIMULUS_KEYS)
+
+    for modality, rewarded, non_rewarded in (
+        ("visual", lists[0], lists[1]), ("audio", lists[2], lists[3]),
+    ):
+        if set(rewarded) & set(non_rewarded):
+            raise ValueError(
+                f"{modality}-rewarded and {modality}-non-rewarded must not contain the same Hz."
+            )
+
+    result = dict(expvars)
+    for key in LEGACY_STIMULUS_KEYS:
+        result.pop(key, None)
+    result.update(zip(STIMULUS_KEYS, lists))
+    return result
 
 
 def show_progress(trial: int, iti: float, modality: int, freq: float):
@@ -8,7 +65,9 @@ def show_progress(trial: int, iti: float, modality: int, freq: float):
     print(f"Trial: {trial}    ITI: {iti}    Modality: {mod}    Frequency: {freq}")
 
 
-async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
+async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict, log_path: str):
+    import yaml
+
     from amas.agent import NotWorkingError
     from numpy import arange
     from numpy.random import uniform
@@ -18,6 +77,8 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
 
     from flkl.bhv.share import as_millis, flush_message_for
 
+    expvars = normalize_stimuli(expvars)
+
     reward_pin = expvars.get("reward-pin", 4)
     audio_pin = expvars.get("speaker-pin", 2)
     visual_pin = expvars.get("led-pin", 3)
@@ -25,6 +86,7 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
 
     reward_duration = expvars.get("reward-duration", 0.01)
     flickr_duration = expvars.get("flickr-duration", 2.)
+    flickr_on_ratio = expvars.get("flickr-on-ratio", DEFAULT_FLICKR_ON_RATIO)
     stamp_duration = as_millis(0.05)
     initial_stamp_duration = as_millis(0.1)
     last_stamp_duration = as_millis(0.2)
@@ -32,8 +94,8 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
     reward_duration_millis = as_millis(reward_duration)
     flickr_duration_millis = as_millis(flickr_duration)
 
-    flickr_sync_rwd = expvars.get("rewarded-frequency", [12, 14, 16])
-    flickr_sync_ext = expvars.get("extinction-frequency", [6, 8, 10])
+    flickr_sync_rwd = expvars["visual-rewarded"]
+    flickr_sync_ext = expvars["visual-non-rewarded"]
     flickr_sync = mix(
         flickr_sync_rwd,
         flickr_sync_ext,
@@ -41,7 +103,8 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
         expvars.get("extinction-ratio", 1)
     )
     flickr_visual = flickr_sync
-    flickr_audio = expvars.get("audio-frequency", [2, 9, 11, 13, 20])
+    flickr_audio_rwd = expvars["audio-rewarded"]
+    flickr_audio = flickr_audio_rwd + expvars["audio-non-rewarded"]
     flickrs = mixn(
         [flickr_sync, flickr_visual, flickr_audio],
         [
@@ -50,6 +113,12 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
             expvars.get("audio-ratio", 1),
         ]
     )
+
+    if not flickrs:
+        raise ValueError("No training stimuli are enabled. Check the four stimulus lists and modality ratios.")
+
+    for frequency in set(flickrs):
+        equal_on_parameters(frequency, flickr_duration_millis, flickr_on_ratio)
 
     modalities = mixn([[0], [1], [2]],
                       [
@@ -62,6 +131,8 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
     iti_mean = expvars.get("ITI", 15.0)
     iti_range = expvars.get("ITI-range", 5.0)
     trials_per_stim = expvars.get("trials-per-stimulus", 20)
+    if isinstance(trials_per_stim, bool) or not isinstance(trials_per_stim, int) or trials_per_stim < 1:
+        raise ValueError("trials-per-stimulus must be a positive integer.")
 
     flickr_per_trial, modality_per_trial = blockwise_shuffle2(
         repeat(flickrs, trials_per_stim),
@@ -77,31 +148,33 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
             for i, modality, flickr in trials:
                 iti = uniform(iti_mean - iti_range, iti_mean + iti_range)
                 show_progress(i, iti, modality, flickr)
-                await flush_message_for(agent, iti_mean)
+                await flush_message_for(agent, iti)
                 if modality == 0:
                     if flickr in flickr_sync_rwd:
-                        ino.flick_for2(visual_pin, audio_pin, flickr, flickr, flickr_duration_millis, reward_pin, reward_duration_millis)
+                        ino.flick_for2(visual_pin, audio_pin, flickr, flickr, flickr_duration_millis, reward_pin, reward_duration_millis, on_ratio=flickr_on_ratio)
                     else:
-                        ino.flick_for2(visual_pin, audio_pin, flickr, flickr, flickr_duration_millis, 0, reward_duration_millis)
+                        ino.flick_for2(visual_pin, audio_pin, flickr, flickr, flickr_duration_millis, 0, reward_duration_millis, on_ratio=flickr_on_ratio)
                 elif modality == 1:
                     if flickr in flickr_sync_rwd:
-                        ino.flick_for(visual_pin, flickr, flickr_duration_millis, reward_pin, reward_duration_millis)
+                        ino.flick_for(visual_pin, flickr, flickr_duration_millis, reward_pin, reward_duration_millis, on_ratio=flickr_on_ratio)
                     else:
-                        ino.flick_for(visual_pin, flickr, flickr_duration_millis, 0, reward_duration_millis)
+                        ino.flick_for(visual_pin, flickr, flickr_duration_millis, 0, reward_duration_millis, on_ratio=flickr_on_ratio)
                 else:
-                    ino.flick_for(audio_pin, flickr, flickr_duration_millis, 0, reward_duration_millis)
+                    audio_reward_pin = reward_pin if flickr in flickr_audio_rwd else 0
+                    ino.flick_for(audio_pin, flickr, flickr_duration_millis, audio_reward_pin, reward_duration_millis, on_ratio=flickr_on_ratio)
                 await agent.sleep(flickr_duration + reward_duration)
                 ino.high_for(ir_pin, stamp_duration)
             await agent.sleep(1.)
             ino.high_for(ir_pin, last_stamp_duration)
+
+            with open(log_path, "r") as f:
+                final_config = yaml.safe_load(f)
+            final_config["Experimental"]["finished"] = True
+            with open(log_path, "w") as f:
+                yaml.dump(final_config, f, default_flow_style=False)
+
             agent.send_to(AgentAddress.OBSERVER.value, SessionMarker.NEND)
             agent.finish()
-
-        with open(log_path, "r") as f:
-            final_config = yaml.safe_load(f)
-        final_config["Experimental"]["finished"] = True
-        with open(log_path, "w") as f:
-            yaml.dump(final_config, f, default_flow_style=False)
 
     except NotWorkingError:
         pass
@@ -137,6 +210,9 @@ def main():
 
     with open(yaml_path, "r") as f:
         config_data = yaml.safe_load(f)
+    config_data["Experimental"] = normalize_stimuli(config_data.get("Experimental", {}))
+    config_data["Experimental"]["finished"] = False
+    config_data["Experimental"].setdefault("flickr-on-ratio", DEFAULT_FLICKR_ON_RATIO)
 
     log_dir = "./log"
     if not exists(log_dir):
@@ -177,7 +253,7 @@ def main():
 
     controller = (
         Agent("CONTROLLER")
-        .assign_task(flickr_discrimination, ino=flkl, expvars=config.experimental)
+        .assign_task(flickr_discrimination, ino=flkl, expvars=config.experimental, log_path=log_path)
         .assign_task(self_terminate)
     )
 

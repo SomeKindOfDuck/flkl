@@ -71,6 +71,50 @@ single = ["G12M0", "G13M3"]
 multi = ["G12F1", "G12F2"]
 ```
 
+## フリッカーのパルス幅 (`train` / `test`)
+
+`Experimental.flickr-on-ratio` は、刺激提示時間に対する合計ON時間の割合。省略時は `0.28`。
+`flickr-duration: 2.`、`flickr-on-ratio: 0.28` なら、どの周波数でも合計560 msだけONになる。
+例えば4 Hzでは約70 ms、14 Hzでは20 ms、20 Hzでは14 ms／パルス。
+`0.5` にすると2秒提示中の合計ON時間は1秒になる。値は0より大きく1より小さくする。
+
+視覚・聴覚それぞれについて合計ON時間を揃える。非同期提示でも各チャンネルのHzから幅を決める。
+周期が提示時間に収まりきらない場合は末尾のパルスを考慮し、ON時間の配分を調整する。
+Arduino側はマイクロ秒単位でパルス幅の端数を分配し、刺激開始を基準に切り替え時刻を決める。
+実際の出力精度はArduinoの時計分解能・実行時間に依存する。
+使用した `flickr-on-ratio` は、省略時の既定値も含めて開始時の設定ログに保存する。
+
+Pythonと `ino/` は同じ版を使うこと。`train` / `test` は起動時にスケッチをアップロードする。
+装置を動かさない検証は `uv run python -m unittest discover -s tests -v` (g++が必要)。
+
+## training の刺激と報酬
+
+`Experimental` に視覚・聴覚それぞれの「報酬あり」「報酬なし」のHzを直接列挙する。
+例えば以下は、視覚14 Hzが報酬あり・4 Hzが報酬なし、聴覚12 Hzと15 Hzは両方とも報酬あり。
+
+```yaml
+Experimental:
+  visual-rewarded: [14]
+  visual-non-rewarded: [4]
+  audio-rewarded: [12, 15]
+  audio-non-rewarded: []
+```
+
+報酬はlickの有無によらず、刺激提示終了直後に `reward-pin` へ `reward-duration` 秒間出す。
+空の `[]` または省略した分類からは試行を生成しない。
+上の例では聴覚単独の無報酬試行はゼロ。視覚の2リストを空にすれば、聴覚単独だけの訓練になる。
+同じモダリティの報酬あり・なしに同じHzを重複指定するとエラーにする。
+視聴覚同期試行は `visual-*` の周波数と報酬区分に従い、同じHzを視覚・聴覚に提示する。
+
+各周波数の基本試行数は `trials-per-stimulus`。視覚単独・同期では報酬ありに `reward-ratio`、
+報酬なしに `extinction-ratio` を掛け、さらに `visual-ratio` / `sync-ratio` を掛ける。
+聴覚単独では各周波数に `audio-ratio` を掛ける。
+使用した4分類は、省略した項目の `[]` も含めて設定ログに保存する。
+
+旧形式の `rewarded-frequency` / `extinction-frequency` / `audio-frequency` /
+`audio-rewarded-frequency` も読み込める。旧 `audio-frequency` は全聴覚刺激の一覧として扱い、
+報酬の有無で2リストへ変換する。新旧の刺激設定を同じYAML内に混在させるとエラーにする。
+
 ## 訓練経過の処理(`monitor/`)
 
 tdms(NAS上)→ binary parquet(NAS上)→ 前処理 → 作図 の順に処理する。

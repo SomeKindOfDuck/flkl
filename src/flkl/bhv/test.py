@@ -1,6 +1,6 @@
 from amas.agent import Agent
 
-from flkl.bhv.share import Flkl
+from flkl.bhv.share import DEFAULT_FLICKR_ON_RATIO, Flkl, equal_on_parameters
 
 
 def show_progress(trial: int, iti: float, modality: int, vhz: float, ahz: float):
@@ -27,6 +27,7 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
 
     reward_duration = expvars.get("reward-duration", 0.01)
     flickr_duration = expvars.get("flickr-duration", 2.)
+    flickr_on_ratio = expvars.get("flickr-on-ratio", DEFAULT_FLICKR_ON_RATIO)
     stamp_duration = as_millis(0.05)
     initial_stamp_duration = as_millis(0.1)
     last_stamp_duration = as_millis(0.2)
@@ -72,6 +73,12 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
                       ]
     )
 
+    for modality, (vhz, ahz) in zip(modalities, flickrs):
+        if modality != 3:
+            equal_on_parameters(vhz, flickr_duration_millis, flickr_on_ratio)
+        if modality != 2:
+            equal_on_parameters(ahz, flickr_duration_millis, flickr_on_ratio)
+
     iti_mean = expvars.get("ITI", 7.0)
     iti_range = expvars.get("ITI-range", 3.0)
     trials_per_stim = expvars.get("trials-per-stimulus", 10)
@@ -94,16 +101,16 @@ async def flickr_discrimination(agent: Agent, ino: Flkl, expvars: dict):
                 await flush_message_for(agent, iti)
                 if modality == 0 or modality == 1:
                     if vhz in flickr_sync_rwd:
-                        ino.flick_for2(visual_pin, audio_pin, vhz, ahz, flickr_duration_millis, reward_pin, reward_duration_millis)
+                        ino.flick_for2(visual_pin, audio_pin, vhz, ahz, flickr_duration_millis, reward_pin, reward_duration_millis, on_ratio=flickr_on_ratio)
                     else:
-                        ino.flick_for2(visual_pin, audio_pin, vhz, ahz, flickr_duration_millis, 0, reward_duration_millis)
+                        ino.flick_for2(visual_pin, audio_pin, vhz, ahz, flickr_duration_millis, 0, reward_duration_millis, on_ratio=flickr_on_ratio)
                 elif modality == 2:
                     if vhz in flickr_sync_rwd:
-                        ino.flick_for(visual_pin, vhz, flickr_duration_millis, reward_pin, reward_duration_millis)
+                        ino.flick_for(visual_pin, vhz, flickr_duration_millis, reward_pin, reward_duration_millis, on_ratio=flickr_on_ratio)
                     else:
-                        ino.flick_for(visual_pin, vhz, flickr_duration_millis, 0, reward_duration_millis)
+                        ino.flick_for(visual_pin, vhz, flickr_duration_millis, 0, reward_duration_millis, on_ratio=flickr_on_ratio)
                 else:
-                    ino.flick_for(audio_pin, ahz, flickr_duration_millis, 0, reward_duration_millis)
+                    ino.flick_for(audio_pin, ahz, flickr_duration_millis, 0, reward_duration_millis, on_ratio=flickr_on_ratio)
                 await agent.sleep(flickr_duration + reward_duration)
                 ino.high_for(ir_pin, stamp_duration)
             await agent.sleep(1.)
@@ -144,6 +151,7 @@ def main():
 
     with open(yaml_path, "r") as f:
         config_data = yaml.safe_load(f)
+    config_data.setdefault("Experimental", {}).setdefault("flickr-on-ratio", DEFAULT_FLICKR_ON_RATIO)
 
     log_dir = "./log"
     if not exists(log_dir):

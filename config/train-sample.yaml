@@ -11,10 +11,12 @@ Experimental:
 
   reward-duration: 0.01
   flickr-duration: 2.
+  flickr-on-ratio: 0.28  # Total ON time / stimulus duration, separately for visual and audio
 
-  rewarded-frequency: [14]
-  extinction-frequency: [4]
-  audio-frequnecy: [3, 6, 9, 12, 15]
+  visual-rewarded: [14]
+  visual-non-rewarded: [4]
+  audio-rewarded: []
+  audio-non-rewarded: [3, 6, 9, 12, 15]
 
   reward-ratio: 1
   extinction-ratio: 1
