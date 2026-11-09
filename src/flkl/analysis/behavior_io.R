@@ -3,7 +3,8 @@ library(data.table)
 
 # data/behavior/にある1セッション分の行動データを読み込む
 # 2026-10-23 以降、正本は NAS(bhv/parquet/)にあり、2p のデータがある日の分だけ
-# daily.sh が data/behavior/ に *_binary.parquet としてコピーする。*_binary.csv(以前の形式)も読める
+# daily.sh --manual を SYNC_2P_BEHAVIOR=1 で実行すると data/behavior/ にコピーする。
+# *_binary.csv(以前の形式)も読める
 # 旧merged.csvからsubject/dateで絞り込んだものと同じ形式
 # (subject, date, condition, phase, session, time, event)で返す
 read_behavior_data <- function(

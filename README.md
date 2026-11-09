@@ -5,7 +5,7 @@
 ```
 src/flkl/
 ├── bhv/        # 実験制御(uv run train / test / blink)
-├── monitor/    # 訓練経過の前処理・作図と、その日次自動化
+├── monitor/    # 訓練経過の前処理・作図(手動実行)
 └── analysis/   # 2pデータの本解析
 config/         # 設定ファイル(*-sample.* をコピーして使う)
 data/           # データ(git管理外)
@@ -31,14 +31,14 @@ log/            # ログ(git管理外)
   - 本解析(`analysis/`): 上記に加えて `arrow`, `glmnet`, `viridis`, `future.apply`, `progressr`,
     `utexr`(GitHub の `7cm-diameter/utexr` から `remotes::install_github("7cm-diameter/utexr")` などで入れる)
 
-### 日次自動化(`monitor/daily.sh`)で使うシステムのコマンド
+### 手動の一括処理(`monitor/daily.sh --manual`)で使うシステムのコマンド
 
 Ubuntu(GNOME)を想定。
 
 | コマンド | 用途 | Ubuntu のパッケージ |
 |---|---|---|
 | `gio` | NAS(SMB)のマウント | `gvfs-backends`(GNOMEなら通常入っている) |
-| `systemd-run`, `systemctl --user` | 定期実行と通知の常駐 | systemd |
+| `systemd-run` | 通知の常駐 | systemd |
 | `flock` | 多重起動の防止 | `util-linux` |
 | `/usr/bin/python3` + libnotify | クリックでフォルダを開ける通知 | `python3-gi`, `gir1.2-notify-0.7` |
 | `notify-send` | 上記が使えないときの予備の通知 | `libnotify-bin` |
@@ -145,54 +145,29 @@ uv run merge --input-dir <NAS の bhv/parquet>
 Rscript src/flkl/monitor/draw_progress.R [subject ...] [--force]
 ```
 
-### 日次自動化
+### 手動で一括実行する場合
 
-`src/flkl/monitor/daily.sh` が、NAS のマウント → `bhv/` 直下の tdms を `bhv/tdms/` へ移動 → 未処理 tdms の検出 → `detect` →
+`pj-yoneyama` では monitor の定期的な自動処理を無効にしている。
+既存の systemd timer が `daily.sh` を引数なしで呼んでも、設定の読み込み・ログ作成・NAS へのアクセス前に正常終了する。
+タイマー自体の設定はPC側に残るため、別ブランチに切り替えた場合の動作は、そのブランチの `daily.sh` に従う。
+変換・集計・作図のコードと、上記の個別コマンドはそのまま使用できる。
+
+一連の処理を1回実行するには、明示的に `--manual` を付ける。
+
+```bash
+bash src/flkl/monitor/daily.sh --manual
+```
+
+このコマンドが、NAS のマウント → `bhv/` 直下の tdms を `bhv/tdms/` へ移動 → 未処理 tdms の検出 → `detect` →
 parquet への変換(`bhv/parquet/` に置く)→ `merge`(出力はローカルの `data/monitor/`)→ 作図 を行う。
 新しいデータがなければ変換・merge・作図はしない。`SYNC_2P_BEHAVIOR=1` のときは、2p のデータがある日の binary parquet の `data/behavior/` へのコピーを毎回確かめる。
 完了・失敗時にはデスクトップ通知が出て、クリックすると図(失敗時はログ)のフォルダが開く。
 17時以降の実行で当日のデータが1つもなければ、NAS への移行忘れの可能性として通知する。
 
-systemd user timer で毎時起動する。以下の2ファイルを `~/.config/systemd/user/` に作成する
-(`ExecStart` のパスは clone 先に合わせる)。
-
-`flkl-monitor.service`:
-
-```ini
-[Unit]
-Description=flkl: detect, merge and draw new behavior data on NAS
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/bash /path/to/flkl/src/flkl/monitor/daily.sh
-TimeoutStartSec=2h
-```
-
-`flkl-monitor.timer`:
-
-```ini
-[Unit]
-Description=Run flkl-monitor hourly from 9:00 to 17:00
-
-[Timer]
-OnCalendar=*-*-* 09..17:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now flkl-monitor.timer
-
-systemctl --user start flkl-monitor.service   # 今すぐ1回実行する
-systemctl --user list-timers flkl-monitor.timer  # 次回の実行予定
-```
-
 ## 本解析(`analysis/`)
 
 2pデータは `data/2p/{subject}-{date}/` に置く。各スクリプトはディレクトリ名から個体名と日付を取得し、
 対応する行動データを `data/behavior/` から読み込む(`src/flkl/analysis/behavior_io.R`。`*_binary.parquet` を優先し、なければ `*_binary.csv`)。
-`data/behavior/` のファイルは、`SYNC_2P_BEHAVIOR=1` なら、`data/2p/` にディレクトリを作った次の `daily.sh` の実行で NAS からコピーされる。
+`data/behavior/` のファイルは手動で用意する。`SYNC_2P_BEHAVIOR=1` に設定して
+`daily.sh --manual` を実行すると、`data/2p/` にディレクトリがある日の分を NAS からコピーできる。
 実行方法は各スクリプトの先頭のコメントを参照。

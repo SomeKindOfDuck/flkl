@@ -5,12 +5,23 @@
 #   $NAS_DIR 直下に置かれた tdms は tdms/ に移してから処理する。
 # ローカル: merge の出力(data/monitor/)と作図(fig/monitor/)。
 #   本解析用に、2p のデータがある日(data/2p/{subject}-{date}/)の binary parquet だけ data/behavior/ にコピーする。
-# 新しいデータがなければ変換・merge・作図はせずに終了する。systemd user timer から毎時起動する想定。
+# 新しいデータがなければ変換・merge・作図はせずに終了する。
+# pj-yoneyama では手動実行のみ。既存の timer による引数なしの呼び出しは何もせず終了する。
 # 環境に依存する設定(NASの場所など)は config/monitor.env から読み込む
 # (config/monitor-sample.env をコピーして作成する。詳細は README 参照)。
-# Usage: bash src/flkl/monitor/daily.sh
+# Usage: bash src/flkl/monitor/daily.sh --manual
 
 set -euo pipefail
+
+# 設定の読み込み・ログ作成・NAS へのアクセスより前に、自動実行を止める。
+if [[ $# -eq 0 ]]; then
+    printf 'Automatic monitoring is disabled. To run once: bash %s --manual\n' "$0"
+    exit 0
+fi
+if [[ $# -ne 1 || "${1:-}" != "--manual" ]]; then
+    printf 'Usage: bash %s --manual\n' "$0" >&2
+    exit 2
+fi
 
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
