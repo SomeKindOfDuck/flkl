@@ -11,8 +11,9 @@ wheels/
 
 log/
 fig/
-!*sample.yaml
 group.toml
 *.yaml
+!config/*-sample.yaml
 data/
+monitor-output/
 config/monitor.env

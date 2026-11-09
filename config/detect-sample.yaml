@@ -1,0 +1,50 @@
+# TDMSViewer / detect の設定例。実際の記録装置の値に合わせて編集する。
+# flkl 直下の default.yaml として保存するか、monitor --config で指定する。
+# TDMS 内のチャンネル名に合わせ、検出対象の全チャンネルの設定を用意する。
+fs: 2000 # サンプリング周波数(Hz)
+single_view: false
+visible:
+  FrameSignal: false
+  IR: true
+  LED: true
+  Sound: true
+  Lick: true
+  Reward: true
+  RotaryA: false
+  RotaryB: false
+invert_y:
+  FrameSignal: false
+  IR: false
+  LED: false
+  Sound: false
+  Lick: false
+  Reward: false
+  RotaryA: false
+  RotaryB: false
+single:
+  FrameSignal: false
+  IR: false
+  LED: false
+  Sound: false
+  Lick: false
+  Reward: false
+  RotaryA: false
+  RotaryB: false
+threshold: # [ON 閾値, OFF 閾値]。記録電圧と同じ単位
+  FrameSignal: [0.1, 0.1]
+  IR: [0.8, 0.1]
+  LED: [0.8, 0.1]
+  Sound: [0.8, 0.1]
+  Lick: [4.5, 0.1]
+  Reward: [0.8, 0.1]
+  RotaryA: [0.8, 0.1]
+  RotaryB: [0.8, 0.1]
+debounce: # サンプル数。fs=2000 のとき20サンプルは10 ms
+  FrameSignal: 0
+  IR: 0
+  LED: 0
+  Sound: 0
+  Lick: 20
+  Reward: 0
+  RotaryA: 0
+  RotaryB: 0

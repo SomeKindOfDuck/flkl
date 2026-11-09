@@ -2,6 +2,9 @@
 
 視覚・聴覚刺激(フリッカー)を用いた弁別課題の実験制御と解析。
 
+`pj-yoneyama` は別の利用者・Windowsの解析環境を前提とする。
+行動データの処理は `uv run monitor <TDMSファイル...>` で手動実行し、保存先は引数で指定する。
+
 ```
 src/flkl/
 ├── bhv/        # 実験制御(uv run train / test / blink)
@@ -13,16 +16,16 @@ fig/            # 図(git管理外)
 log/            # ログ(git管理外)
 ```
 
-コマンドはすべてプロジェクトのルートで実行する(スクリプト内で相対パスを使っているため)。
+以下のコマンド例はプロジェクトのルートで実行する。コマンドに渡す相対パスは実行時のディレクトリを基準にする。
 
 ## 依存関係
 
 ### Python
 
 - [uv](https://docs.astral.sh/uv/)。Pythonの依存パッケージは `uv sync` で入る(`pyproject.toml` 参照)
-- `detect` コマンド: tdms を binary csv に変換する(`daily.sh` がそのあと parquet に変換する)。
+- `detect` コマンド: tdms を binary csv に変換する(`monitor` がそのあと parquet に変換する)。
   [TDMSViewer](https://github.com/7cm-diameter/TDMSViewer) を clone して `uv tool install <clone先>` でインストールする
-  (`~/.local/bin` に入る)
+  (`detect --help` が実行できるようPATHを設定する。実行ファイルは `monitor --detect-command` でも指定できる)
 
 ### R
 
@@ -31,9 +34,12 @@ log/            # ログ(git管理外)
   - 本解析(`analysis/`): 上記に加えて `arrow`, `glmnet`, `viridis`, `future.apply`, `progressr`,
     `utexr`(GitHub の `7cm-diameter/utexr` から `remotes::install_github("7cm-diameter/utexr")` などで入れる)
 
-### 手動の一括処理(`monitor/daily.sh --manual`)で使うシステムのコマンド
+WindowsでRのインストール先がPATHにない場合は、`monitor --rscript "C:/Program Files/R/<version>/bin/Rscript.exe"` のように指定する。
+`monitor --no-plot` ならRを使わず変換・集計まで実行する。
 
-Ubuntu(GNOME)を想定。
+### 旧Linux向け一括処理(`monitor/daily.sh --manual`)で使うシステムのコマンド
+
+以下は旧 `daily.sh` 専用。Windows向けの `uv run monitor` では使用しない。
 
 | コマンド | 用途 | Ubuntu のパッケージ |
 |---|---|---|
@@ -49,12 +55,23 @@ Ubuntu(GNOME)を想定。
 
 | ファイル | 内容 | 作り方 |
 |---|---|---|
-| `config/monitor.env` | NAS の場所など、`daily.sh` の環境設定 | `config/monitor-sample.env` をコピーして書き換える |
-| `default.yaml` | `detect` のパラメータ設定(サンプリング周波数、検出するチャンネルなど) | 既存の環境からコピーする |
-| `group.toml` | 個体の群分け | 下記の形式で作成する(`uv run merge` 時に未登録の個体がいると対話で追記される) |
+| `default.yaml` または `--config` で指定したYAML | TDMSの検出設定(サンプリング周波数、閾値など) | `config/detect-sample.yaml` をコピーし、記録装置に合わせる |
+| `<出力先>/group.toml` | 個体の群分け | 下記の形式で作成する。未登録の個体は対話で指定できる。既存ファイルを使う場合は `--group-config` で指定する |
 | `config/train.yaml`, `config/test.yaml` | 実験制御のパラメータ | `config/*-sample.yaml` をコピーする |
+| `config/monitor.env` | 旧Linux向け `daily.sh` のNAS設定 | 旧処理を使う場合だけ `config/monitor-sample.env` をコピーする |
 
-`config/monitor.env` の項目(bash から `source` される):
+`monitor` のTDMS検出設定は、明示した `--config PATH` を最優先する。
+省略時は **flkl直下の `default.yaml`** を使い、それもなければ処理開始前にエラーにして `--config` の指定を求める。
+実行時のディレクトリにたまたまある別の `default.yaml` は使用しない。
+選択した設定ファイルの絶対パスを開始時に表示する。`train.yaml` とは別の設定なので、実験制御用YAMLを渡さないこと。
+
+`fs` は記録のサンプリング周波数(Hz)、`threshold` はチャンネル別の `[ON閾値, OFF閾値]`、
+`invert_y` は信号の反転、`debounce` は安定状態の判定に使うサンプル数。
+例えば `fs: 2000` で `debounce.Lick: 20` は10 msに相当する。サンプルの値は記録装置に合わせて変更する。
+TDMS内のチャンネル名と設定のキーを一致させ、検出対象の全チャンネルの設定を用意する。
+RotaryA / RotaryB は従来どおり検出結果から除外する。
+
+旧 `config/monitor.env` の項目(bashから `source` される。新しい `monitor` コマンドでは読まない):
 
 | 変数 | 内容 |
 |---|---|
@@ -117,42 +134,58 @@ Experimental:
 
 ## 訓練経過の処理(`monitor/`)
 
-tdms(NAS上)→ binary parquet(NAS上)→ 前処理 → 作図 の順に処理する。
+### TDMSファイルを指定して実行する(Windows / Linux)
 
-### データの置き場所
+TDMSファイルを1つ以上引数で渡す。別々のフォルダのファイルもまとめて渡せる。
+WindowsのPowerShellでの例(`flkl/default.yaml` があれば `--config` は省略できる):
 
-| パス | 内容 |
-|---|---|
-| NAS `bhv/tdms/*.tdms` | 行動実験の tdms。`bhv/` 直下に置いたものは `daily.sh` がここに移す |
-| NAS `bhv/parquet/*_binary.parquet` | tdms から変換した binary parquet(1セッション1ファイル、列は `event`, `time`)。行動データの正本 |
-| `data/behavior/*_binary.parquet` | 本解析用のコピー。`SYNC_2P_BEHAVIOR=1` のとき、2p のデータがある日(`data/2p/{subject}-{date}/`)の分だけ `daily.sh` が NAS からコピーする |
-| `data/monitor/recent.csv` | 個体ごとに直近10セッションの生イベント(raster 用) |
-| `data/monitor/summary.csv` | 全セッションの、刺激×時間窓ごとの平均 lick rate |
-| `fig/monitor/{実験日}/` | raster / progress / psychometric の図と、その日の全個体の `progress-all.jpg` |
-| `log/monitor/{日付}.log` | `daily.sh` のログ |
-
-### 手動で実行する場合
-
-```bash
-# 1. tdms を binary csv に変換し(NAS の bhv/tdms/ で実行。RotaryA/RotaryB は常に除外)、parquet にして bhv/parquet/ に置く
-detect <tdmsファイル...> default.yaml --exclude-events RotaryA RotaryB
-uv run python -m flkl.monitor.to_parquet <*_binary.csv...> --outdir <NAS の bhv/parquet> --remove
-
-# 2. 前処理(未処理のセッションだけ追加する。再処理は --overwrite)
-uv run merge --input-dir <NAS の bhv/parquet>
-
-# 3. 作図(既存の図はスキップする。描き直しは --force)
-Rscript src/flkl/monitor/draw_progress.R [subject ...] [--force]
+```powershell
+uv sync
+uv run monitor "D:/recordings/M01_Phase-01_1_20261109-100000.tdms" "D:/recordings/M02_Phase-01_1_20261109-110000.tdms" --config "D:/settings/detect.yaml" --output-dir "D:/analysis/yoneyama"
 ```
 
-### 手動で一括実行する場合
+ワイルドカードも使える。スペース・日本語を含むパスは引用符で囲む。
+
+```powershell
+uv run monitor "D:/実験データ/*.tdms" --output-dir "D:/解析結果/yoneyama"
+```
+
+入力TDMSはその場所から読み込み、生成物は `--output-dir` の下へ保存する(省略時は `./monitor-output/`)。
+`detect` → parquet変換 → 集計 → Rで作図、の順に処理する。NASのマウント・Bash・定期実行の設定は不要。
+指定したセッションを再計算して集計へ反映し、他のセッションの集計を保持する。図は集計結果から更新する。
+既存の群設定を利用する場合は `--group-config "D:/settings/group.toml"` を追加する。
+
+出力先の構成:
+
+```text
+<出力先>/
+├── binary/*_binary.parquet  # TDMSごとのイベント(event, time)
+├── recent.csv              # 個体ごとの直近10セッション
+├── summary.csv             # 刺激×時間窓ごとの平均lick rate
+├── group.toml              # --group-config を省略した場合の群設定
+└── fig/{実験日}/           # raster / progress / psychometric / progress-all
+```
+
+ファイル名の形式は従来の `{subject}_{phase}_{session}_{YYYYMMDD}-{HHMMSS}.tdms` を使う。
+現在の集計は同じ個体・同じ日を1セッションとして扱う。同一個体・同一日の別ファイルを同時に指定した場合や、
+別フォルダにある同名のファイルを指定した場合は、処理前にエラーにする。
+解析窓(刺激2秒、試行境界の間隔5秒)や達成基準は従来のままなので、実験条件を変える場合は別途調整が必要。
+
+### 個別に実行する場合
+
+```powershell
+detect <TDMSファイル...> <検出設定.yaml> --output <CSV出力先> --exclude-events RotaryA RotaryB
+uv run python -m flkl.monitor.to_parquet <binary.csvファイル...> --outdir <parquet出力先>
+uv run merge --input-dir <parquet出力先> --output-dir <集計出力先> --group-config <群設定.toml>
+Rscript src/flkl/monitor/draw_progress.R --data-dir <集計出力先> --figure-dir <図の出力先>
+```
+
+### 旧Linux向け一括処理
 
 `pj-yoneyama` では monitor の定期的な自動処理を無効にしている。
 既存の systemd timer が `daily.sh` を引数なしで呼んでも、設定の読み込み・ログ作成・NAS へのアクセス前に正常終了する。
 タイマー自体の設定はPC側に残るため、別ブランチに切り替えた場合の動作は、そのブランチの `daily.sh` に従う。
-変換・集計・作図のコードと、上記の個別コマンドはそのまま使用できる。
-
-一連の処理を1回実行するには、明示的に `--manual` を付ける。
+旧環境で一連の処理を1回実行するには、明示的に `--manual` を付ける。
 
 ```bash
 bash src/flkl/monitor/daily.sh --manual
@@ -168,6 +201,7 @@ parquet への変換(`bhv/parquet/` に置く)→ `merge`(出力はローカル�
 
 2pデータは `data/2p/{subject}-{date}/` に置く。各スクリプトはディレクトリ名から個体名と日付を取得し、
 対応する行動データを `data/behavior/` から読み込む(`src/flkl/analysis/behavior_io.R`。`*_binary.parquet` を優先し、なければ `*_binary.csv`)。
-`data/behavior/` のファイルは手動で用意する。`SYNC_2P_BEHAVIOR=1` に設定して
-`daily.sh --manual` を実行すると、`data/2p/` にディレクトリがある日の分を NAS からコピーできる。
+新しい `monitor` のイベント出力は `<出力先>/binary/` にある。これを `data/behavior/` に配置するか、
+`read_behavior_data()` の `behavior_dir` と `group_config` に利用環境のパスを渡す。
+2p解析の各スクリプトは従来の配置を前提とする箇所があるため、新しい利用者の構成に合わせて呼び出し元も調整する。
 実行方法は各スクリプトの先頭のコメントを参照。

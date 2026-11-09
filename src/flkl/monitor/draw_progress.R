@@ -9,6 +9,7 @@
 # - progress-all.jpg           : 最新の実験日にデータがある個体のprogressをまとめたもの
 #
 # Usage: Rscript src/flkl/monitor/draw_progress.R [subject ...] [--force]
+#          [--data-dir DIR] [--figure-dir DIR]
 
 library(tidyverse)
 library(data.table)
@@ -30,16 +31,35 @@ CRITERION_FREQS <- c(4, 6, 8, 10, 12, 14)
 
 STIMULUS_TYPE_LEVELS <- c("Visual-only", "Audio-only", "Synchronous", "Asynchronous")
 
-DATA_DIR <- "data/monitor"
-FIGURE_DIR <- "fig/monitor"
-
 parse_args <- function() {
   args <- commandArgs(trailingOnly = TRUE)
-
-  list(
-    subject_ids = setdiff(args, "--force"),
-    force = "--force" %in% args
+  result <- list(
+    subject_ids = character(), force = FALSE,
+    data_dir = "data/monitor", figure_dir = "fig/monitor"
   )
+  i <- 1L
+  while (i <= length(args)) {
+    arg <- args[[i]]
+    if (arg == "--force") {
+      result$force <- TRUE
+    } else if (arg %in% c("--data-dir", "--figure-dir")) {
+      if (i == length(args) || startsWith(args[[i + 1L]], "--")) {
+        stop("Missing directory after ", arg)
+      }
+      key <- if (arg == "--data-dir") "data_dir" else "figure_dir"
+      result[[key]] <- args[[i + 1L]]
+      i <- i + 1L
+    } else if (arg %in% c("--help", "-h")) {
+      cat("Usage: Rscript draw_progress.R [subject ...] [--force] [--data-dir DIR] [--figure-dir DIR]\n")
+      quit(status = 0)
+    } else if (startsWith(arg, "--")) {
+      stop("Unknown option: ", arg)
+    } else {
+      result$subject_ids <- c(result$subject_ids, arg)
+    }
+    i <- i + 1L
+  }
+  result
 }
 
 theme_monitor <- function() {
@@ -345,9 +365,11 @@ draw_psychometric_function <- function(summary, subject, experiment_date, force)
 #############################
 
 args <- parse_args()
+DATA_DIR <- args$data_dir
+FIGURE_DIR <- args$figure_dir
 
-summary <- fread(file.path(DATA_DIR, "summary.csv"), colClasses = list(character = "date"))
-recent <- fread(file.path(DATA_DIR, "recent.csv"), colClasses = list(character = "date"))
+summary <- fread(file.path(DATA_DIR, "summary.csv"), colClasses = list(character = c("subject", "date")))
+recent <- fread(file.path(DATA_DIR, "recent.csv"), colClasses = list(character = c("subject", "date")))
 
 if (length(args$subject_ids) > 0) {
   missing_subjects <- setdiff(args$subject_ids, unique(summary$subject))

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import toml
 
 STIM_DURATION = 2.0
 MIN_ITI = 5.0
@@ -29,18 +30,13 @@ KEY_COLUMNS = ["subject", "date"]
 
 
 def load_group_config(path: Path) -> dict[str, list[str]]:
-    try:
-        import tomllib
-    except ModuleNotFoundError:
-        import tomli as tomllib
-
     if not path.exists():
         group_config = {"single": [], "multi": []}
         save_group_config(group_config, path)
         return group_config
 
-    with path.open("rb") as f:
-        data = tomllib.load(f)
+    with path.open(encoding="utf-8-sig") as f:
+        data = toml.load(f)
 
     return {
         "single": list(data.get("single", [])),
@@ -268,7 +264,7 @@ def keep_recent_sessions(df: pd.DataFrame, n_recent: int) -> pd.DataFrame:
 def read_csv_or_empty(path: Path) -> pd.DataFrame:
     if path.exists():
         # 読み書きの繰り返しで浮動小数点の値が変わらないようにround_tripで読む
-        return pd.read_csv(path, dtype={"date": str}, float_precision="round_trip")
+        return pd.read_csv(path, dtype={"subject": str, "date": str}, float_precision="round_trip")
     return pd.DataFrame()
 
 
@@ -286,7 +282,7 @@ def write_csv(df: pd.DataFrame, path: Path) -> None:
     tmp_path.replace(path)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Update recent event data and lick summary for training progress plots."
     )
@@ -329,11 +325,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Overwrite existing subject/date data. By default, they are skipped.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> None:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
 
     csv_paths = args.csv or sorted([*args.input_dir.glob("*_binary.parquet"), *args.input_dir.glob("*_binary.csv")])
     input_paths = [path.resolve() for path in csv_paths]
